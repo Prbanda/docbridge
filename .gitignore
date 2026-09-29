@@ -1,0 +1,24 @@
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Env — never commit real values
+.env
+.env.*
+!.env.example
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+backend.hcl
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Test artifacts
+coverage/

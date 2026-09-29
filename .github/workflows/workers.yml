@@ -1,0 +1,71 @@
+name: workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "workers/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/workers.yml"
+  pull_request:
+    paths:
+      - "workers/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/workers.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck --workspaces --if-present
+      - run: npm test -w @docbridge/worker-fanout -w @docbridge/worker-delivery -w @docbridge/worker-ws
+      - name: Bundle handlers (esbuild)
+        run: |
+          npm run build -w @docbridge/worker-fanout
+          npm run build -w @docbridge/worker-delivery
+          npm run build -w @docbridge/worker-ws
+      - uses: actions/upload-artifact@v4
+        with:
+          name: worker-bundles
+          path: workers/*/dist/handler.mjs
+
+  deploy-dev:
+    # Becomes real in M2/M3 when the Lambda functions exist (lambda module).
+    if: github.ref == 'refs/heads/main' && vars.LAMBDA_DEPLOY_ENABLED == 'true'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: worker-bundles
+          path: workers
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Update function code
+        run: |
+          for fn in fanout delivery ws; do
+            if [ -f "workers/$fn/dist/handler.mjs" ]; then
+              (cd "workers/$fn/dist" && zip -q "/tmp/$fn.zip" handler.mjs)
+              aws lambda update-function-code \
+                --function-name "docbridge-dev-$fn" \
+                --zip-file "fileb:///tmp/$fn.zip"
+            fi
+          done

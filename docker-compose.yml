@@ -1,0 +1,102 @@
+# Local environment (TDD step 0.1): 3 service containers, Postgres with
+# 3 logical databases + 3 roles, LocalStack for S3/SQS. Workers run as
+# local processes: `npm run dev -w @docbridge/worker-fanout` (and -delivery).
+name: docbridge
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-auth-local-dev}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:-platform-local-dev}
+      DOCBRIDGE_DB_PASSWORD: ${DOCBRIDGE_DB_PASSWORD:-docbridge-local-dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:latest
+    environment:
+      SERVICES: s3,sqs
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./docker/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal s3 ls s3://docbridge-staging-local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    environment:
+      PORT: "3001"
+      DATABASE_URL: postgres://auth_svc:${AUTH_DB_PASSWORD:-auth-local-dev}@postgres:5432/auth
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  platform:
+    build:
+      context: .
+      dockerfile: services/platform/Dockerfile
+    environment:
+      PORT: "3002"
+      DATABASE_URL: postgres://platform_svc:${PLATFORM_DB_PASSWORD:-platform-local-dev}@postgres:5432/platform
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  docbridge-api:
+    build:
+      context: .
+      dockerfile: services/docbridge-api/Dockerfile
+    environment:
+      PORT: "3003"
+      DATABASE_URL: postgres://docbridge_svc:${DOCBRIDGE_DB_PASSWORD:-docbridge-local-dev}@postgres:5432/docbridge
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

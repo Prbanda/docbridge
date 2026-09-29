@@ -1,0 +1,71 @@
+# Reusable pipeline for one ECS service: lint -> test -> image -> ECR -> deploy.
+# Called by the thin per-service workflows which own the path filters (TDD 0.3).
+name: service-pipeline
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Service directory name under services/ (also the ECR repo suffix)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write # OIDC to AWS — no long-lived keys in GitHub
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck -w @docbridge/shared -w @docbridge/${{ inputs.service }}
+      - run: npm run build -w @docbridge/shared
+      - run: npm test -w @docbridge/shared -w @docbridge/${{ inputs.service }}
+
+  build-push:
+    # Push images only from main; PRs stop at checks.
+    if: github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Login to ECR
+        id: ecr¡
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image tagged with git SHA
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/docbridge/${{ inputs.service }}:${{ github.sha }}"
+          docker build -f services/${{ inputs.service }}/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE"
+
+  deploy-dev:
+    # Becomes real in M1 when the ECS services exist (ecs-service module).
+    # Until then the gate variable stays unset and this job is skipped.
+    if: github.ref == 'refs/heads/main' && vars.ECS_DEPLOY_ENABLED == 'true'
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Update ECS service to the new image
+        run: |
+          aws ecs update-service \
+            --cluster docbridge-dev \
+            --service ${{ inputs.service }} \
+            --force-new-deployment

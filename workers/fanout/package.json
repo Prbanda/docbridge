@@ -1,0 +1,19 @@
+{
+  "name": "@docbridge/worker-fanout",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/handler.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/handler.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "node --experimental-strip-types src/local.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.600.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "esbuild": "^0.24.0"
+  }
+}

@@ -1,0 +1,30 @@
+name: auth
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/auth/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/service-auth.yml"
+      - ".github/workflows/_service.yml"
+  pull_request:
+    paths:
+      - "services/auth/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/service-auth.yml"
+      - ".github/workflows/_service.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_service.yml
+    with:
+      service: auth

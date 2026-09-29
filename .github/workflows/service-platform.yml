@@ -1,0 +1,30 @@
+name: platform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/platform/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/service-platform.yml"
+      - ".github/workflows/_service.yml"
+  pull_request:
+    paths:
+      - "services/platform/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/service-platform.yml"
+      - ".github/workflows/_service.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/_service.yml
+    with:
+      service: platform
