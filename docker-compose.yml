@@ -24,7 +24,7 @@ services:
       retries: 10
 
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:4.10.0
     environment:
       SERVICES: s3,sqs
       AWS_DEFAULT_REGION: us-east-1
@@ -51,7 +51,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -69,7 +69,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -93,7 +93,7 @@ services:
       localstack:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
