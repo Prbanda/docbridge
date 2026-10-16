@@ -10,10 +10,10 @@
       "StringLike": {
         "token.actions.githubusercontent.com:sub": [
           "repo:Prbanda/docbridge:*",
-          "repo:Prbanda/docbridge:pull_request",
-          "repo:Prbanda/docbridge:ref:refs/heads/main",
-          "repo:Prbanda/docbridge:environment:dev",
-          "repo:Prbanda/docbridge:environment:prod"
+          "repo:Prbanda@91270956/docbridge@1347999466:pull_request",
+          "repo:Prbanda@91270956/docbridge@1347999466:ref:refs/heads/main",
+          "repo:Prbanda@91270956/docbridge@1347999466:environment:dev",
+          "repo:Prbanda@91270956/docbridge@1347999466:environment:prod"
         ]
       }
     }
