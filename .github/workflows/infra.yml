@@ -43,6 +43,15 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - name: Diagnose GitHub context
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_EVENT: ${{ github.event_name }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          echo "Repository: $GH_REPOSITORY"
+          echo "Event: $GH_EVENT"
+          echo "Ref: $GH_REF"
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
