@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import pg from 'pg';
 import { registerErrorHandler } from '@docbridge/shared';
 import type { Config } from './config.js';
-// test
+
 export function buildApp(config: Config): FastifyInstance {
   const app = Fastify({ logger: true });
   registerErrorHandler(app);
