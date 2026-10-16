@@ -42,7 +42,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
       - name: Login to ECR
-        id: ecr¡
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
       - name: Build and push image tagged with git SHA
         run: |
