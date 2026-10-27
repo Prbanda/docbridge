@@ -6,16 +6,18 @@ on:
     paths:
       - "services/auth/**"
       - "packages/shared/**"
-      - "package.json"
-      - "package-lock.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
       - ".github/workflows/service-auth.yml"
       - ".github/workflows/_service.yml"
   pull_request:
     paths:
       - "services/auth/**"
       - "packages/shared/**"
-      - "package.json"
-      - "package-lock.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
       - ".github/workflows/service-auth.yml"
       - ".github/workflows/_service.yml"
 

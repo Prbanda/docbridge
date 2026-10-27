@@ -43,6 +43,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Terraform creates Lambda functions from these packages (infra/modules/lambda).
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - name: Diagnose GitHub context
         env:
           GH_REPOSITORY: ${{ github.repository }}
@@ -92,6 +98,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Terraform creates Lambda functions from these packages (infra/modules/lambda).
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -130,6 +142,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Terraform creates Lambda functions from these packages (infra/modules/lambda).
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:

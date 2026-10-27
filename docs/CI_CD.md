@@ -51,16 +51,27 @@ usually start only gitleaks.
 
 ### Services (`_service.yml`, called by each `service-*.yml`)
 
-1. **check** — `npm ci`, lint, typecheck/test shared + that service
-2. **build-push** — only on `main`: build Docker image, push to ECR as `docbridge/<service>:<git-sha>`
-3. **deploy-dev** — only on `main` and if `ECS_DEPLOY_ENABLED=true`: force new ECS deployment
+1. **check** — `dotnet build` (warnings as errors), `dotnet format --verify-no-changes`, unit tests
+2. **build-push** — only on `main`: build the image, push to ECR as `docbridge/<service>:<git-sha>` and `:dev`
+3. **deploy-dev** — only on `main` and if `ECS_DEPLOY_ENABLED=true`: force a new ECS deployment (the task
+   definition runs `:dev`) and wait until stable. Rollback: re-tag the previous SHA as `:dev`, re-run.
 
 PRs stop after **check**.
 
 ### Workers (`workers.yml`)
 
-1. **check** — lint, typecheck, test all three workers, esbuild bundles
-2. **deploy-dev** — only on `main` and if `LAMBDA_DEPLOY_ENABLED=true`: zip + `update-function-code`
+1. **check** — build + unit tests, then `scripts/build-lambdas.sh` packages the 5 Lambda zips
+2. **deploy-dev** — only on `main` and if `LAMBDA_DEPLOY_ENABLED=true`: `update-function-code` for all 9 functions
+
+### Web (`web.yml`)
+
+1. **check** — `npm ci`, `npm test` (vitest), `npm run build` (includes `tsc`)
+2. **deploy-dev** — on `main`: write `config.js` from the dev Terraform outputs, sync to the SPA bucket, invalidate CloudFront
+
+### Integration (`integration.yml`)
+
+Nightly, manually, and on service/worker pushes: the whole compose stack, the smoke script, the integration suite,
+and the failure drills (TDD testing strategy: integration on compose + LocalStack).
 
 ### Infra (`infra.yml`)
 

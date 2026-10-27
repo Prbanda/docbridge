@@ -1,0 +1,77 @@
+# SPA: typecheck + build → S3 + CloudFront with the environment's runtime config (API + WebSocket URLs).
+name: web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+  deploy-dev:
+    if: github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Read environment outputs
+        id: tf
+        working-directory: infra/envs/dev
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=docbridge/dev/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="use_lockfile=true" -backend-config="encrypt=true" >/dev/null
+          echo "api=$(terraform output -raw api_url)" >> "$GITHUB_OUTPUT"
+          echo "ws=$(terraform output -raw ws_url)" >> "$GITHUB_OUTPUT"
+          echo "bucket=$(terraform output -raw spa_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "dist=$(terraform output -raw spa_distribution_id)" >> "$GITHUB_OUTPUT"
+      - name: Publish
+        run: |
+          printf 'window.DOCBRIDGE_CONFIG = { apiBaseUrl: "%s", wsUrl: "%s" };\n' "${{ steps.tf.outputs.api }}" "${{ steps.tf.outputs.ws }}" > web/dist/config.js
+          aws s3 sync web/dist "s3://${{ steps.tf.outputs.bucket }}" --delete
+          aws cloudfront create-invalidation --distribution-id "${{ steps.tf.outputs.dist }}" --paths "/index.html" "/config.js"

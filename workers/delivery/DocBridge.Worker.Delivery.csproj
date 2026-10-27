@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Lambda.props" />
+  <PropertyGroup>
+    <AssemblyName>DocBridge.Worker.Delivery</AssemblyName>
+    <RootNamespace>DocBridge.Worker.Delivery</RootNamespace>
+  </PropertyGroup>
+</Project>

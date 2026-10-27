@@ -3,8 +3,8 @@
 Path for a new joiner. Do **Part A** once per AWS account / GitHub repo (usually
 one person). Then use **Part B** (local) and **Part C** (dev up/down).
 
-Prereqs on your machine: Node ≥22, Docker (local), AWS CLI + Terraform ≥1.15.8
-(AWS). Region: `us-east-1`.
+Prereqs on your machine: .NET 10 SDK, Node ≥20 (web build), Docker (local),
+AWS CLI + Terraform ≥1.15.8 (AWS). Region: `us-east-1`.
 
 ---
 
@@ -97,14 +97,18 @@ environments). Use the role ARN from A3 and the state bucket name from A2.
 
 ```bash
 cp .env.example .env   # first time only; defaults are fine
-npm ci
 docker compose up --build -d
 ./scripts/smoke-local.sh
+./scripts/seed.sh local      # demo users + teams; then open http://localhost:8080
 ```
 
-Smoke must PASS for: three services `/health` + `/health/ready`, DB isolation
-(auth cannot reach platform), LocalStack staging bucket + job/task queues with
-DLQs.
+Smoke must PASS for: three services `/health` + `/health/ready`, the worker
+runner, the edge (SPA, runtime config, JWKS, 401 on unauthenticated calls), DB
+isolation (auth cannot reach platform), LocalStack buckets + job/task queues
+with DLQs. Milestone checks: `docs/testing/M1…M5-TESTING.md`.
+
+AWS dev deploy (images, Terraform, Lambda code, ECS roll, SPA) in one command:
+`./scripts/deploy.sh dev`, then `./scripts/seed.sh dev`.
 
 Tear down: `docker compose down` (add `-v` to wipe Postgres).
 

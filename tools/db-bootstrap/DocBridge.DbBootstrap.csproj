@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../workers/Lambda.props" />
+  <PropertyGroup>
+    <AssemblyName>DocBridge.DbBootstrap</AssemblyName>
+    <RootNamespace>DocBridge.DbBootstrap</RootNamespace>
+  </PropertyGroup>
+</Project>

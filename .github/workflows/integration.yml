@@ -1,0 +1,41 @@
+# TDD testing strategy: integration (compose + LocalStack) nightly and on worker/service changes.
+# Runs the whole stack in docker compose and the integration suite against it.
+name: integration
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "workers/**"
+      - "services/**"
+      - "packages/shared/**"
+      - "docker-compose.yml"
+      - "docker/**"
+      - "tests/DocBridge.IntegrationTests/**"
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Start the stack
+        run: docker compose up --build -d --wait
+      - name: Smoke
+        run: ./scripts/smoke-local.sh
+      - name: Integration suite
+        run: dotnet test --project tests/DocBridge.IntegrationTests
+      - name: Failure drills (platform outage, retries, DLQ)
+        run: ./scripts/drill-local.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 200

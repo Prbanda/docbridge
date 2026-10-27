@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../services/auth/DocBridge.Auth.csproj" />
+    <ProjectReference Include="../../services/platform/DocBridge.Platform.csproj" />
+    <ProjectReference Include="../../services/docbridge-api/DocBridge.Api.csproj" />
+    <ProjectReference Include="../../workers/common/DocBridge.Workers.Common.csproj" />
+  </ItemGroup>
+</Project>

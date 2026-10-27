@@ -41,3 +41,9 @@ variable "deletion_protection" {
   type    = bool
   default = false
 }
+
+variable "apply_immediately" {
+  description = "Apply instance changes now (dev) instead of in the next maintenance window (prod)."
+  type        = bool
+  default     = false
+}

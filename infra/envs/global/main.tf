@@ -4,3 +4,7 @@
 module "ecr" {
   source = "../../modules/ecr"
 }
+
+module "apigw_account" {
+  source = "../../modules/apigw-account"
+}

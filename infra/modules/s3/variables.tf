@@ -25,7 +25,7 @@ variable "force_destroy" {
 }
 
 variable "upload_cors_origins" {
-  description = "Origins allowed to use presigned POST/GET against staging (the SPA URL). Tightened once CloudFront exists."
+  description = "Extra origins (beside the SPA CloudFront URL) allowed to use presigned POST/GET, e.g. a local dev server."
   type        = list(string)
-  default     = ["*"]
+  default     = []
 }

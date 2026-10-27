@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>DocBridge.Workers</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.SecretsManager" />
+    <PackageReference Include="AWSSDK.ApiGatewayManagementApi" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../packages/shared/DocBridge.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DocBridge.UnitTests" />
+  </ItemGroup>
+</Project>

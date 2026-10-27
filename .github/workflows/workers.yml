@@ -1,3 +1,4 @@
+# Lambda workers (ADR-011): build + test → package → update-function-code (TDD 0.3).
 name: workers
 
 on:
@@ -5,16 +6,22 @@ on:
     branches: [main]
     paths:
       - "workers/**"
+      - "tools/db-bootstrap/**"
       - "packages/shared/**"
-      - "package.json"
-      - "package-lock.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - "scripts/build-lambdas.sh"
       - ".github/workflows/workers.yml"
   pull_request:
     paths:
       - "workers/**"
+      - "tools/db-bootstrap/**"
       - "packages/shared/**"
-      - "package.json"
-      - "package-lock.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - "scripts/build-lambdas.sh"
       - ".github/workflows/workers.yml"
 
 permissions:
@@ -26,34 +33,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-dotnet@v5
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck --workspaces --if-present
-      - run: npm test -w @docbridge/worker-fanout -w @docbridge/worker-delivery -w @docbridge/worker-ws
-      - name: Bundle handlers (esbuild)
-        run: |
-          npm run build -w @docbridge/worker-fanout
-          npm run build -w @docbridge/worker-delivery
-          npm run build -w @docbridge/worker-ws
+          global-json-file: global.json
+      - run: dotnet build DocBridge.slnx -c Release
+      - run: dotnet test --project tests/DocBridge.UnitTests -c Release --no-build
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: worker-bundles
-          path: workers/*/dist/handler.mjs
+          name: lambda-packages
+          path: dist/lambda/*.zip
 
   deploy-dev:
-    # Becomes real in M2/M3 when the Lambda functions exist (lambda module).
     if: github.ref == 'refs/heads/main' && vars.LAMBDA_DEPLOY_ENABLED == 'true'
     needs: check
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: worker-bundles
-          path: workers
+          name: lambda-packages
+          path: dist/lambda
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -61,11 +62,16 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
       - name: Update function code
         run: |
-          for fn in fanout delivery ws; do
-            if [ -f "workers/$fn/dist/handler.mjs" ]; then
-              (cd "workers/$fn/dist" && zip -q "/tmp/$fn.zip" handler.mjs)
-              aws lambda update-function-code \
-                --function-name "docbridge-dev-$fn" \
-                --zip-file "fileb:///tmp/$fn.zip"
-            fi
-          done
+          deploy() { # package, functions...
+            local pkg="$1"; shift
+            for fn in "$@"; do
+              aws lambda update-function-code --function-name "docbridge-dev-$fn" --zip-file "fileb://dist/lambda/$pkg.zip" >/dev/null
+              aws lambda wait function-updated-v2 --function-name "docbridge-dev-$fn"
+              echo "updated docbridge-dev-$fn"
+            done
+          }
+          deploy fanout fanout
+          deploy delivery delivery
+          deploy ws ws-connect ws-subscribe ws-disconnect
+          deploy maintenance task-dlq job-dlq sweeper
+          deploy db-bootstrap db-bootstrap

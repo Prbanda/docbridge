@@ -22,3 +22,11 @@ backend.hcl
 
 # Test artifacts
 coverage/
+dist/
+infra/modules/lambda/.placeholder-*.zip
+
+# .NET build output
+bin/
+obj/
+*.user
+TestResults/
