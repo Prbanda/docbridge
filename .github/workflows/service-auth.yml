@@ -11,6 +11,7 @@ on:
       - "global.json"
       - ".github/workflows/service-auth.yml"
       - ".github/workflows/_service.yml"
+  workflow_dispatch:
   pull_request:
     paths:
       - "services/auth/**"

@@ -86,6 +86,19 @@ resource "aws_iam_role_policy" "sqs_trigger" {
   })
 }
 
+# IAM is eventually consistent: a VPC function created the moment its role's policies attach can fail ENI
+# creation with InsufficientRolePermissions and land in the Failed state.
+resource "time_sleep" "iam_propagation" {
+  create_duration = "15s"
+  depends_on = [
+    aws_iam_role_policy_attachment.basic,
+    aws_iam_role_policy_attachment.vpc,
+    aws_iam_role_policy.app,
+    aws_iam_role_policy.secrets,
+    aws_iam_role_policy.sqs_trigger,
+  ]
+}
+
 resource "aws_lambda_function" "this" {
   function_name    = local.name
   role             = aws_iam_role.this.arn
@@ -115,7 +128,7 @@ resource "aws_lambda_function" "this" {
     ignore_changes = [filename, source_code_hash]
   }
 
-  depends_on = [aws_cloudwatch_log_group.this, aws_iam_role_policy_attachment.basic, aws_iam_role_policy_attachment.vpc]
+  depends_on = [aws_cloudwatch_log_group.this, time_sleep.iam_propagation]
 }
 
 resource "aws_lambda_event_source_mapping" "sqs" {
