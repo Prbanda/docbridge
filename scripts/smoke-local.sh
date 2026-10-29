@@ -1,5 +1,5 @@
 #!/bin/bash
-# M0 local smoke test (SV-3). Run after: docker compose up --build -d
+# Local smoke test (SV-3). Run after: docker compose up --build -d
 # Proves: services healthy, each service's credentials reach ONLY its own
 # logical database (ADR-009), LocalStack has the staging bucket + both
 # queue pairs with redrive policies.
@@ -33,6 +33,13 @@ for svc in "auth:3001" "platform:3002" "docbridge-api:3003"; do
   check "$name /health/ready (own DB reachable)" curl -fsS "http://localhost:${port}/health/ready"
 done
 
+check "workers-local /health (SQS pollers + WebSocket emulator)" curl -fsS "http://localhost:3005/health"
+check "edge serves the SPA" curl -fsS "http://localhost:8080/"
+check "edge serves runtime config" curl -fsS "http://localhost:8080/config.js"
+check "edge routes JWKS to auth" curl -fsS "http://localhost:8080/.well-known/jwks.json"
+UNAUTH=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8080/destinations/teams")
+check_eq "unauthenticated API call rejected" "401" "$UNAUTH"
+
 echo "== Database isolation (ADR-009: cross-service connect must fail) =="
 check "auth_svc connects to auth db" \
   docker compose exec -T postgres psql "postgres://auth_svc:${AUTH_DB_PASSWORD:-auth-local-dev}@localhost:5432/auth" -c "SELECT 1"
@@ -42,6 +49,8 @@ check_eq "auth_svc denied on platform db" "denied" "$CROSS"
 echo "== LocalStack resources =="
 check "staging bucket exists" \
   docker compose exec -T localstack awslocal s3 ls s3://docbridge-staging-local
+check "platform document bucket exists" \
+  docker compose exec -T localstack awslocal s3 ls s3://docbridge-platform-local
 for q in docbridge-job-queue docbridge-job-queue-dlq docbridge-task-queue docbridge-task-queue-dlq; do
   check "queue $q exists" \
     docker compose exec -T localstack awslocal sqs get-queue-url --queue-name "$q"

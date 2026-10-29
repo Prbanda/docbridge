@@ -10,6 +10,7 @@ on:
     paths:
       - "infra/**"
       - ".github/workflows/infra.yml"
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -43,6 +44,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Terraform creates Lambda functions from these packages (infra/modules/lambda).
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - name: Diagnose GitHub context
         env:
           GH_REPOSITORY: ${{ github.repository }}
@@ -83,7 +90,7 @@ jobs:
             });
 
   apply-dev:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: validate
     runs-on: ubuntu-latest
     environment: dev
@@ -92,6 +99,12 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Terraform creates Lambda functions from these packages (infra/modules/lambda).
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -107,6 +120,25 @@ jobs:
             -backend-config="use_lockfile=true" \
             -backend-config="encrypt=true"
           terraform apply -input=false -auto-approve
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      # ECS services can't start without an image to pull: on a fresh environment the first create fails with
+      # "No rollback candidate". Push :dev for any service whose repo lacks it; later builds come from _service.yml.
+      - name: Seed service images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for svc in auth platform docbridge-api; do
+            if aws ecr describe-images --repository-name "docbridge/$svc" --image-ids imageTag=dev >/dev/null 2>&1; then
+              echo "docbridge/$svc:dev exists"
+              continue
+            fi
+            REPO="$REGISTRY/docbridge/$svc"
+            docker build -f "services/$svc/Dockerfile" -t "$REPO:${{ github.sha }}" -t "$REPO:dev" .
+            docker push "$REPO:${{ github.sha }}"
+            docker push "$REPO:dev"
+          done
       - name: Apply dev
         working-directory: infra/envs/dev
         run: |
@@ -119,7 +151,7 @@ jobs:
           terraform apply -input=false -auto-approve
 
   apply-prod:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: apply-dev
     runs-on: ubuntu-latest
     # Requires manual approval: configure the 'prod' environment with a
@@ -130,11 +162,29 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      # Terraform creates Lambda functions from these packages (infra/modules/lambda).
+      - name: Package Lambdas
+        run: ./scripts/build-lambdas.sh
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+      # Prod runs :prod. Promote the image dev is running for any service whose repo lacks it.
+      - name: Seed service images
+        run: |
+          for svc in auth platform docbridge-api; do
+            if aws ecr describe-images --repository-name "docbridge/$svc" --image-ids imageTag=prod >/dev/null 2>&1; then
+              echo "docbridge/$svc:prod exists"
+              continue
+            fi
+            MANIFEST=$(aws ecr batch-get-image --repository-name "docbridge/$svc" --image-ids imageTag=dev \
+              --query 'images[0].imageManifest' --output text)
+            aws ecr put-image --repository-name "docbridge/$svc" --image-tag prod --image-manifest "$MANIFEST" >/dev/null
+          done
       - name: Apply prod
         working-directory: infra/envs/prod
         run: |

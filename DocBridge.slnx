@@ -1,0 +1,46 @@
+<Solution>
+  <Folder Name="/packages/" />
+  <Folder Name="/packages/shared/">
+    <Project Path="packages/shared/DocBridge.Shared.csproj" />
+  </Folder>
+  <Folder Name="/services/" />
+  <Folder Name="/services/auth/">
+    <Project Path="services/auth/DocBridge.Auth.csproj" />
+  </Folder>
+  <Folder Name="/services/docbridge-api/">
+    <Project Path="services/docbridge-api/DocBridge.Api.csproj" />
+  </Folder>
+  <Folder Name="/services/platform/">
+    <Project Path="services/platform/DocBridge.Platform.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DocBridge.IntegrationTests/DocBridge.IntegrationTests.csproj" />
+    <Project Path="tests/DocBridge.UnitTests/DocBridge.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/" />
+  <Folder Name="/tools/db-bootstrap/">
+    <Project Path="tools/db-bootstrap/DocBridge.DbBootstrap.csproj" />
+  </Folder>
+  <Folder Name="/tools/seed/">
+    <Project Path="tools/seed/DocBridge.Seed.csproj" />
+  </Folder>
+  <Folder Name="/workers/" />
+  <Folder Name="/workers/common/">
+    <Project Path="workers/common/DocBridge.Workers.Common.csproj" />
+  </Folder>
+  <Folder Name="/workers/delivery/">
+    <Project Path="workers/delivery/DocBridge.Worker.Delivery.csproj" />
+  </Folder>
+  <Folder Name="/workers/fanout/">
+    <Project Path="workers/fanout/DocBridge.Worker.Fanout.csproj" />
+  </Folder>
+  <Folder Name="/workers/local-runner/">
+    <Project Path="workers/local-runner/DocBridge.Workers.LocalRunner.csproj" />
+  </Folder>
+  <Folder Name="/workers/maintenance/">
+    <Project Path="workers/maintenance/DocBridge.Worker.Maintenance.csproj" />
+  </Folder>
+  <Folder Name="/workers/ws/">
+    <Project Path="workers/ws/DocBridge.Worker.Ws.csproj" />
+  </Folder>
+</Solution>

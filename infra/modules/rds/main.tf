@@ -140,6 +140,7 @@ resource "aws_db_instance" "this" {
   parameter_group_name   = aws_db_parameter_group.this.name
   publicly_accessible    = false
   multi_az               = var.multi_az
+  apply_immediately      = var.apply_immediately
 
   backup_retention_period    = 1
   auto_minor_version_upgrade = true

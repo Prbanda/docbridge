@@ -6,16 +6,19 @@ on:
     paths:
       - "services/docbridge-api/**"
       - "packages/shared/**"
-      - "package.json"
-      - "package-lock.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
       - ".github/workflows/service-docbridge-api.yml"
       - ".github/workflows/_service.yml"
+  workflow_dispatch:
   pull_request:
     paths:
       - "services/docbridge-api/**"
       - "packages/shared/**"
-      - "package.json"
-      - "package-lock.json"
+      - "Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
       - ".github/workflows/service-docbridge-api.yml"
       - ".github/workflows/_service.yml"
 

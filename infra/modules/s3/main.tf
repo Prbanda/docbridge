@@ -81,7 +81,7 @@ resource "aws_s3_bucket_cors_configuration" "staging" {
 
   cors_rule {
     allowed_methods = ["GET", "POST", "PUT"]
-    allowed_origins = var.upload_cors_origins
+    allowed_origins = concat(["https://${aws_cloudfront_distribution.spa.domain_name}"], var.upload_cors_origins)
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600

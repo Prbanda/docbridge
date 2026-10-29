@@ -1,7 +1,22 @@
-# Local environment (TDD step 0.1): 3 service containers, Postgres with
-# 3 logical databases + 3 roles, LocalStack for S3/SQS. Workers run as
-# local processes: `npm run dev -w @docbridge/worker-fanout` (and -delivery).
+# Local environment (requirements: Operability; TDD 0.1). Every application service runs here:
+#   postgres      3 logical databases + 3 roles (ADR-009)
+#   localstack    S3 (staging + platform buckets) and SQS (job/task queues + DLQs)
+#   auth, platform, docbridge-api   the three .NET services (ADR-006/017)
+#   workers-local the Lambda handlers' code behind SQS long-pollers + a WebSocket API emulator (plan G10)
+#   edge          nginx standing in for API Gateway: one origin for the SPA, the APIs and /ws
+# Open http://localhost:8080 after: docker compose up --build -d && ./scripts/seed-local.sh
 name: docbridge
+
+x-aws-local: &aws-local
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+
+x-jwt: &jwt
+  # Local issuer = the edge origin, the same role the HTTP API URL plays in AWS (plan G1).
+  JWT_ISSUER: http://localhost:8080
+  JWT_AUDIENCE: docbridge
 
 services:
   postgres:
@@ -28,25 +43,36 @@ services:
     environment:
       SERVICES: s3,sqs
       AWS_DEFAULT_REGION: us-east-1
+      SQS_ENDPOINT_STRATEGY: path
     ports:
       - "4566:4566"
     volumes:
       - ./docker/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "awslocal s3 ls s3://docbridge-staging-local"]
+      # The task queue is created last by the init hook: healthy means fully initialised.
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name docbridge-task-queue"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
 
   auth:
     build:
       context: .
       dockerfile: services/auth/Dockerfile
     environment:
+      <<: *jwt
       PORT: "3001"
       DATABASE_URL: postgres://auth_svc:${AUTH_DB_PASSWORD:-auth-local-dev}@postgres:5432/auth
+      # AWS injects JWT_PRIVATE_KEY_PEM from Secrets Manager. Locally a key is generated once and kept in a volume.
+      ALLOW_EPHEMERAL_SIGNING_KEY: "true"
+      JWT_PRIVATE_KEY_FILE: /keys/jwt-dev.pem
+      DELIVERY_WORKER_CLIENT_SECRET: ${DELIVERY_WORKER_CLIENT_SECRET:-delivery-worker-local-dev}
+      DOCBRIDGE_API_CLIENT_SECRET: ${DOCBRIDGE_API_CLIENT_SECRET:-docbridge-api-local-dev}
+      PLATFORM_ADMIN_CLIENT_SECRET: ${PLATFORM_ADMIN_CLIENT_SECRET:-platform-admin-local-dev}
     ports:
       - "3001:3001"
+    volumes:
+      - auth-keys:/keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,37 +80,49 @@ services:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
 
   platform:
     build:
       context: .
       dockerfile: services/platform/Dockerfile
     environment:
+      <<: [*jwt, *aws-local]
       PORT: "3002"
       DATABASE_URL: postgres://platform_svc:${PLATFORM_DB_PASSWORD:-platform-local-dev}@postgres:5432/platform
+      AUTH_JWKS_URL: http://edge:8080/.well-known/jwks.json
+      PLATFORM_BUCKET: docbridge-platform-local
     ports:
       - "3002:3002"
     depends_on:
       postgres:
         condition: service_healthy
+      localstack:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/health || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
 
   docbridge-api:
     build:
       context: .
       dockerfile: services/docbridge-api/Dockerfile
     environment:
+      <<: [*jwt, *aws-local]
       PORT: "3003"
       DATABASE_URL: postgres://docbridge_svc:${DOCBRIDGE_DB_PASSWORD:-docbridge-local-dev}@postgres:5432/docbridge
-      AWS_ENDPOINT_URL: http://localstack:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      AUTH_URL: http://edge:8080         # via the local "internal ALB" (nginx), as in AWS
+      PLATFORM_URL: http://edge:8080
+      DOCBRIDGE_API_CLIENT_SECRET: ${DOCBRIDGE_API_CLIENT_SECRET:-docbridge-api-local-dev}
+      STAGING_BUCKET: docbridge-staging-local
+      # Presigned URLs must name a host the browser (or test runner) on your machine can reach.
+      S3_PUBLIC_ENDPOINT: http://localhost:4566
+      # Overridable only so the M5 sweeper drill can simulate a publish that fails after commit.
+      JOB_QUEUE_URL: ${DOCBRIDGE_API_JOB_QUEUE_URL:-http://localstack:4566/000000000000/docbridge-job-queue}
     ports:
       - "3003:3003"
     depends_on:
@@ -92,11 +130,59 @@ services:
         condition: service_healthy
       localstack:
         condition: service_healthy
+      auth:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
+
+  workers-local:
+    build:
+      context: .
+      dockerfile: workers/local-runner/Dockerfile
+    environment:
+      <<: [*jwt, *aws-local]
+      PORT: "3005"
+      DATABASE_URL: postgres://docbridge_svc:${DOCBRIDGE_DB_PASSWORD:-docbridge-local-dev}@postgres:5432/docbridge
+      AUTH_URL: http://edge:8080         # via the local "internal ALB" (nginx), as in AWS
+      PLATFORM_URL: http://edge:8080
+      DELIVERY_WORKER_CLIENT_SECRET: ${DELIVERY_WORKER_CLIENT_SECRET:-delivery-worker-local-dev}
+      DOCBRIDGE_API_CLIENT_SECRET: ${DOCBRIDGE_API_CLIENT_SECRET:-docbridge-api-local-dev}
+      STAGING_BUCKET: docbridge-staging-local
+      JOB_QUEUE_URL: http://localstack:4566/000000000000/docbridge-job-queue
+      JOB_DLQ_URL: http://localstack:4566/000000000000/docbridge-job-queue-dlq
+      TASK_QUEUE_URL: http://localstack:4566/000000000000/docbridge-task-queue
+      TASK_DLQ_URL: http://localstack:4566/000000000000/docbridge-task-queue-dlq
+      # Pushes go through the AWS SDK management client to the emulator in this same container.
+      WS_CALLBACK_URL: http://127.0.0.1:3005
+      # Shorter than AWS (60,300) so the retry and DLQ drills finish in seconds locally.
+      RETRY_BACKOFF_SECONDS: ${RETRY_BACKOFF_SECONDS:-10,20}
+      SWEEP_INTERVAL_SECONDS: "30"
+      SWEEPER_REPUBLISH_AFTER_SECONDS: "60"
+    ports:
+      - "3005:3005"
+    depends_on:
+      docbridge-api:
+        condition: service_healthy
+      platform:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3005/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  edge:
+    build:
+      context: .
+      dockerfile: docker/edge/Dockerfile
+    # No depends_on: nginx resolves upstreams per request, so the edge starts first and the services reach each
+    # other through it, the way they go through the internal ALB in AWS.
+    ports:
+      - "8080:8080"
 
 volumes:
   postgres-data:
+  auth-keys:

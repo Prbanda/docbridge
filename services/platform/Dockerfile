@@ -1,30 +1,21 @@
-# Build context is the repo root (monorepo workspaces).
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json tsconfig.base.json ./
-COPY packages/shared/package.json packages/shared/
-COPY packages/shared/tsconfig.json packages/shared/
-COPY packages/shared/src packages/shared/src
-COPY services/auth/package.json services/auth/
-COPY services/platform/package.json services/platform/
-COPY services/docbridge-api/package.json services/docbridge-api/
-COPY workers/fanout/package.json workers/fanout/
-COPY workers/delivery/package.json workers/delivery/
-COPY workers/ws/package.json workers/ws/
-RUN npm ci --ignore-scripts
+# Build context is the repo root. Framework-dependent publish on the Alpine ASP.NET runtime
+# (busybox wget serves the compose/ECS health checks). ReadyToRun: precompiled, so a new task's first
+# requests don't pay for JIT (measured ~4 s cold on 0.25 vCPU Fargate before this).
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+WORKDIR /src
+COPY Directory.Build.props Directory.Packages.props ./
+COPY packages/shared/DocBridge.Shared.csproj packages/shared/
+COPY services/platform/DocBridge.Platform.csproj services/platform/
+
+RUN dotnet restore services/platform/DocBridge.Platform.csproj -r linux-musl-x64 -p:PublishReadyToRun=true
 COPY packages/shared packages/shared
 COPY services/platform services/platform
-RUN npm run build -w @docbridge/shared -w @docbridge/platform
 
-FROM node:22-alpine
-ENV NODE_ENV=production
+RUN dotnet publish services/platform/DocBridge.Platform.csproj -c Release -r linux-musl-x64 --self-contained false -p:PublishReadyToRun=true -o /out --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 WORKDIR /app
-COPY --from=build /app/package.json /app/package-lock.json ./
-COPY --from=build /app/packages/shared/package.json packages/shared/
-COPY --from=build /app/services/platform/package.json services/platform/
-COPY --from=build /app/node_modules node_modules
-COPY --from=build /app/packages/shared/dist packages/shared/dist
-COPY --from=build /app/services/platform/dist services/platform/dist
-USER node
+COPY --from=build /out .
+USER $APP_UID
 EXPOSE 3002
-CMD ["node", "services/platform/dist/index.js"]
+ENTRYPOINT ["dotnet", "DocBridge.Platform.dll"]

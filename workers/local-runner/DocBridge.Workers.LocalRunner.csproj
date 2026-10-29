@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>DocBridge.Workers.LocalRunner</AssemblyName>
+    <RootNamespace>DocBridge.Workers.LocalRunner</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../common/DocBridge.Workers.Common.csproj" />
+  </ItemGroup>
+</Project>
