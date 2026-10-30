@@ -12,6 +12,7 @@ builder.Services.AddSingleton(dataSource);
 builder.Services.AddSingleton(sp => TokenIssuer.FromEnvironment(settings, sp.GetRequiredService<ILogger<TokenIssuer>>()));
 
 var app = builder.Build();
+app.UsePreflightPassthrough();
 app.UseDocBridgeErrors();
 
 await Migrator.RunAsync(dataSource, typeof(TokenIssuer).Assembly, app.Logger);
