@@ -82,6 +82,16 @@ resource "aws_apigatewayv2_route" "default" {
   authorizer_id      = aws_apigatewayv2_authorizer.jwt.id
 }
 
+# CORS preflights carry no Authorization header, so on $default they would hit the JWT authorizer and get 401,
+# failing every browser call that sends JSON or a bearer token. This unauthenticated route forwards them to the
+# services, which answer 204 (ServiceHost.UsePreflightPassthrough); API Gateway adds the cors_configuration headers.
+# Actual requests still go through $default's authorizer.
+resource "aws_apigatewayv2_route" "preflight" {
+  api_id    = aws_apigatewayv2_api.this.id
+  route_key = "OPTIONS /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.alb.id}"
+}
+
 resource "aws_apigatewayv2_route" "public" {
   for_each  = toset(["POST /auth/register", "POST /auth/login", "POST /auth/token", "GET /.well-known/{proxy+}"])
   api_id    = aws_apigatewayv2_api.this.id

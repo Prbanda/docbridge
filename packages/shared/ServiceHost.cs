@@ -34,6 +34,22 @@ public static class ServiceHost
         .AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Information);
 
     /// <summary>
+    /// The HTTP API forwards CORS preflights to us (its OPTIONS /{proxy+} route has an integration) and replaces our
+    /// response headers with its own cors_configuration. All a preflight needs from us is a 2xx before routing or auth
+    /// can turn it into a 405/401. Register first.
+    /// </summary>
+    public static IApplicationBuilder UsePreflightPassthrough(this IApplicationBuilder app) =>
+        app.Use((ctx, next) =>
+        {
+            if (!HttpMethods.IsOptions(ctx.Request.Method))
+            {
+                return next();
+            }
+            ctx.Response.StatusCode = StatusCodes.Status204NoContent;
+            return Task.CompletedTask;
+        });
+
+    /// <summary>
     /// /health = process up and warmed (ALB target health). /health/ready = this service's own credentials reach its
     /// own logical database (ADR-009). Both are anonymous: the gateway never routes them.
     ///

@@ -12,6 +12,7 @@ builder.Services.AddDocBridgeAuth(Env.Required("AUTH_JWKS_URL"), JwtSettings.Fro
     "memberships:read", "documents:ingest", "platform:admin");
 
 var app = builder.Build();
+app.UsePreflightPassthrough();
 app.UseDocBridgeErrors();
 app.UseAuthentication();
 app.UseAuthorization();

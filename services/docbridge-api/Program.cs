@@ -39,6 +39,7 @@ builder.Services.AddSingleton(new StagingStore(AwsClients.S3(), AwsClients.S3(En
 builder.Services.AddSingleton(new JobQueue(AwsClients.Sqs(), Env.Required("JOB_QUEUE_URL")));
 
 var app = builder.Build();
+app.UsePreflightPassthrough();
 app.UseDocBridgeErrors();
 app.UseAuthentication();
 app.UseAuthorization();
